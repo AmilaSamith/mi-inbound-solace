@@ -506,9 +506,15 @@ public class SolaceEventListener extends GenericEventBasedConsumer implements XM
         flowProps.setAckMode(autoAck
                 ? JCSMPProperties.SUPPORTED_MESSAGE_ACK_AUTO
                 : JCSMPProperties.SUPPORTED_MESSAGE_ACK_CLIENT);
+        if (!autoAck) {
+            // Declare negative outcomes up front so settle(FAILED)/settle(REJECTED) is allowed —
+            // either from handleFailedMessage here or from the Solace connector's NACK operation.
+            flowProps.addRequiredSettlementOutcomes(
+                    XMLMessage.Outcome.FAILED, XMLMessage.Outcome.REJECTED);
+        }
         if (selector != null && !selector.trim().isEmpty()) {
             flowProps.setSelector(selector.trim());
-        }        
+        }
         return flowProps;
     }
 
@@ -553,13 +559,21 @@ public class SolaceEventListener extends GenericEventBasedConsumer implements XM
 
         log.info("Received message with HTTP content type: " + message.getHTTPContentType() + " and content: " + message.hasContent() + " and binary payload as base64: " + binaryPayloadAsBase64);
 
-        boolean success = injectHandler.injectMessage(message);
+        SolaceInjectHandler.InjectionOutcome outcome = injectHandler.injectMessage(message);
 
         if (!autoAck) {
-            if (success) {
-                message.ackMessage();
-            } else {
-                handleFailedMessage(message);
+            switch (outcome) {
+                case SUCCESS:
+                    message.ackMessage();
+                    break;
+                case FAILED:
+                    handleFailedMessage(message);
+                    break;
+                case ALREADY_SETTLED:
+                    // acknowledgeMessage / nackMessage already settled this message during
+                    // mediation. Settling again would conflict with the broker's redelivery
+                    // tracking and (for FAILED outcomes) cause infinite redelivery.
+                    break;
             }
         }
     }

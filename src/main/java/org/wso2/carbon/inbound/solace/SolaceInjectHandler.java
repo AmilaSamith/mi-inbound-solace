@@ -40,6 +40,19 @@ public class SolaceInjectHandler {
 
     private static final Log log = LogFactory.getLog(SolaceInjectHandler.class);
 
+    /**
+     * Outcome of an injection attempt. The listener uses this to decide whether to settle
+     * the JCSMP message itself after mediation returns.
+     */
+    public enum InjectionOutcome {
+        /** Mediation completed without an injection-time exception. Listener should ack. */
+        SUCCESS,
+        /** Injection failed with an exception. Listener should apply its failureOutcome policy. */
+        FAILED,
+        /** A connector op (acknowledgeMessage / nackMessage) already settled the message during mediation. */
+        ALREADY_SETTLED
+    }
+
     private final String injectingSequence;
     private final String onErrorSequence;
     private final SynapseEnvironment synapseEnvironment;
@@ -58,15 +71,16 @@ public class SolaceInjectHandler {
         this.binaryPayloadAsBase64  = binaryPayloadAsBase64;
     }
 
-    public boolean injectMessage(BytesXMLMessage message) {
+    public InjectionOutcome injectMessage(BytesXMLMessage message) {
+        org.apache.synapse.MessageContext synCtx = null;
         try {
             String payload = SolaceUtils.extractPayload(message, binaryPayloadAsBase64);
             if (payload == null || payload.isEmpty()) {
                 log.warn("Received empty Solace message, skipping injection.");
-                return true;
+                return InjectionOutcome.SUCCESS;
             }
 
-            org.apache.synapse.MessageContext synCtx = SolaceUtils.createMessageContext(
+            synCtx = SolaceUtils.createMessageContext(
                     synapseEnvironment, payload, message, contentType, binaryPayloadAsBase64);
 
             // Stash the raw JCSMP message so sendReply / acknowledgeMessage / nackMessage
@@ -94,15 +108,28 @@ public class SolaceInjectHandler {
                     synapseEnvironment.injectInbound(synCtx, seq, sequential);
                 } else {
                     log.error("Sequence '" + injectingSequence + "' not found.");
-                    return false;
+                    return InjectionOutcome.FAILED;
                 }
             } else {
                 synapseEnvironment.injectMessage(synCtx);
             }
-            return true;
+
+            // In sequential mode, mediation has run by now and acknowledgeMessage / nackMessage
+            // would have set this flag if invoked. In async mode the flag won't be set yet —
+            // we fall back to SUCCESS and accept that the listener may double-settle in that
+            // configuration; the connector ops are documented as sequential-mode operations.
+            if (Boolean.TRUE.equals(
+                    synCtx.getProperty(SolaceInboundConstants.SOLACE_INBOUND_MESSAGE_SETTLED))) {
+                return InjectionOutcome.ALREADY_SETTLED;
+            }
+            return InjectionOutcome.SUCCESS;
         } catch (Exception e) {
             log.error("Error injecting Solace message into Synapse engine", e);
-            return false;
+            if (synCtx != null && Boolean.TRUE.equals(
+                    synCtx.getProperty(SolaceInboundConstants.SOLACE_INBOUND_MESSAGE_SETTLED))) {
+                return InjectionOutcome.ALREADY_SETTLED;
+            }
+            return InjectionOutcome.FAILED;
         }
     }
 

@@ -162,6 +162,15 @@ public final class SolaceInboundConstants {
     public static final String SOLACE_INBOUND_MESSAGE = "solace.inbound.message";
 
     /**
+     * Set to {@code Boolean.TRUE} by acknowledgeMessage / nackMessage after they settle the
+     * inbound JCSMP message. The listener checks this after mediation and skips its own
+     * post-mediation ack/nack so the broker doesn't see a conflicting second settlement
+     * (which corrupts redelivery counting and can cause infinite redelivery). Must match
+     * {@code SolaceConstants.SOLACE_INBOUND_MESSAGE_SETTLED} in the connector module.
+     */
+    public static final String SOLACE_INBOUND_MESSAGE_SETTLED = "solace.inbound.message.settled";
+
+    /**
      * Prefix for user-defined properties carried in the Solace SDTMap
      * ({@code message.getProperties()}).
      * Each key is surfaced as {@code solace.userProp.<key>} on the MessageContext.
