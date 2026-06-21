@@ -7,8 +7,8 @@
     "rank": 15,
     "type": "Inbound",
     "category": "Developer Tools",
-    "documentationUrl": "",
-    "description": "Solace Message Listener",
+    "documentationUrl": "https://mi.docs.wso2.com/en/latest/reference/connectors/solace-connector/solace-connector-overview/",
+    "description": "Solace inbound endpoint acts as a message consumer for Solace PubSub+ broker. It receives messages from configured topic/queue and inject them into the mediation flow.",
     "status": "Active",
     "labels": [
         "integration",
