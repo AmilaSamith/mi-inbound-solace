@@ -138,7 +138,12 @@
             <url>https://maven.wso2.org/nexus/content/repositories/releases/</url>
         </repository>
     </distributionManagement>
-
+    <scm>
+        <connection>scm:git:https://github.com/wso2-extensions/mi-inbound-solace.git</connection>
+        <developerConnection>scm:git:https://github.com/wso2-extensions/mi-inbound-solace.git</developerConnection>
+        <url>https://github.com/wso2-extensions/mi-inbound-solace</url>
+        <tag>HEAD</tag>
+    </scm>
     <build>
         <plugins>
             <plugin>
